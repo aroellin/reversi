@@ -68,6 +68,8 @@ python train.py
     2.  **Network Training**: The network is trained on the generated data (board states, MCTS move probabilities, and game outcomes).
     3.  **Checkpointing**: The newly trained model is saved as `models/reversi_model_iter_X.pt`.
 
+I suggest to start training with only a few MCTS steps at the beginning (`MCTS_SIMULATIONS_TRAIN=10` in `train.py`). This speeds up the initial training phase, so that you can play against some moderately well playing game quickly. After iteration 30, you can switch to `MCTS_SIMULATIONS_TRAIN=100`.
+
 ### 2. Evaluate Model Performance
 
 To benchmark models against each other and track their strength, use the evaluation script:
