@@ -19,23 +19,32 @@ The project provides a complete ecosystem for training, analyzing, and playing w
     cd <repository-directory>
     ```
 
-2.  **Create a `requirements.txt` file:**
-    Create a file named `requirements.txt` in the root of the project and add the following lines. These cover all dependencies for training, evaluation, the desktop GUI, and model exporting.
+2.  **Set Up a Virtual Environment (Recommended)**
+    Using a virtual environment is highly recommended to isolate project dependencies and avoid conflicts with other Python projects. Choose one of the following options.
+
+    **Option A: Using `venv` (Python's built-in tool)**
+    This is the standard tool available in Python 3.
+
+    ```bash
+    # Create the virtual environment in a folder named 'venv'
+    python -m venv venv
+
+    # Activate the environment
+    # On macOS and Linux:
+    source venv/bin/activate
+    # On Windows (Command Prompt):
+    venv\Scripts\activate
     ```
-    # Core deep learning framework
-    torch
 
-    # For numerical operations and board representation
-    numpy
+    **Option B: Using `conda` (for Anaconda/Miniconda users)**
+    If you use Anaconda or Miniconda, you can create an environment with `conda`.
 
-    # For the interactive desktop GUI (play.py)
-    pygame
+    ```bash
+    # Create a new environment named 'reversi_ai' with Python 3.10
+    conda create -n reversi_ai python=3.10
 
-    # For handling the ONNX model format (pt2onnx.py)
-    onnx
-    
-    # For running and verifying ONNX models in Python
-    onnxruntime
+    # Activate the environment
+    conda activate reversi_ai
     ```
 
 3.  **Install the required Python packages:**
