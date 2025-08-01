@@ -1,8 +1,12 @@
 # Reversi AI with Self-Play and MCTS
 
+Play here my own trained model [here](https://aroellin.github.io/apps/reversi/)!
+
 > **Note**: This entire project, from the core game logic to the training pipeline and web interface, was created through an iterative process of "vibe coding" with Google's Gemini Pro 2.5. The development involved describing high-level goals, generating code, and progressively refining it based on the model's outputs.
 
 This project implements a sophisticated AI for the game of Reversi (Othello), built on principles from DeepMind's AlphaZero. The AI learns the game's strategy from scratch through a process of self-play, using a deep neural network and Monte Carlo Tree Search (MCTS) to continuously improve its performance.
+
+
 
 The project provides a complete ecosystem for training, analyzing, and playing with the AI:
 *   **Training Pipeline (`train.py`):** An AlphaZero-style loop that generates game data and trains the neural network.
