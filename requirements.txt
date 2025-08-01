@@ -1,3 +1,14 @@
+# Core deep learning framework
 torch
+
+# For numerical operations and board representation
 numpy
+
+# For the interactive desktop GUI (play.py)
 pygame
+
+# For handling the ONNX model format (pt2onnx.py)
+onnx
+
+# For running and verifying ONNX models in Python
+onnxruntime
