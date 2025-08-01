@@ -1,6 +1,8 @@
 # Reversi AI with Self-Play and MCTS
 
-This project implements an AI for the game of Reversi (Othello), built on principles from DeepMind's AlphaZero. The AI learns the game's strategy from scratch through a process of self-play, using a deep neural network and Monte Carlo Tree Search (MCTS) to continuously improve its performance.
+> **Note**: This entire project, from the core game logic to the training pipeline and web interface, was created through an iterative process of "vibe coding" with Google's Gemini Pro 2.5. The development involved describing high-level goals, generating code, and progressively refining it based on the model's outputs.
+
+This project implements a sophisticated AI for the game of Reversi (Othello), built on principles from DeepMind's AlphaZero. The AI learns the game's strategy from scratch through a process of self-play, using a deep neural network and Monte Carlo Tree Search (MCTS) to continuously improve its performance.
 
 The project provides a complete ecosystem for training, analyzing, and playing with the AI:
 *   **Training Pipeline (`train.py`):** An AlphaZero-style loop that generates game data and trains the neural network.
@@ -8,96 +10,6 @@ The project provides a complete ecosystem for training, analyzing, and playing w
 *   **Web Interface (`index.html`, `reversi.js`):** A fully client-side web application that runs the AI in the browser using the ONNX runtime, making it easily shareable and accessible.
 *   **Evaluation Suite (`evaluate.py`):** A powerful tool to benchmark different models and strategies against each other in a tournament format, calculating ELO ratings to track progress.
 *   **Model Exporter (`pt2onnx.py`):** A utility to convert trained PyTorch models into the ONNX format for deployment on the web.
-
-## AI Architecture: Policy-Value Network
-
-The brain of the AI is a single, deep `PolicyValueNet`. This network takes the current board state as input and produces two critical outputs in a single forward pass:
-
-1.  **Policy Head:** A probability distribution over all 64 possible moves. This guides the MCTS search by indicating which moves are most promising to explore.
-2.  **Value Head:** A single scalar value between -1 (certain loss) and +1 (certain win). This allows the MCTS to evaluate board positions without playing a full game to the end, dramatically improving search efficiency.
-
-### Detailed Network Structure and Parameter Calculations
-
-The network employs a residual architecture. The architectural constants are defined as `NUM_FILTERS = 64` and `NUM_RESIDUAL_BLOCKS = 4`. The total number of learnable parameters is approximately **1.37 million**.
-
-*Parameters for a `Conv2d` layer are calculated as `(kernel_h * kernel_w * in_channels) * out_channels + out_channels_bias`. A `Linear` layer is `in_features * out_features + out_features_bias`. A `BatchNorm2d` layer has `2 * num_features` learnable parameters (gamma and beta).*
-
----
-
-**1. Input Layer**
-*   **Shape:** `[B, 6, 8, 8]`
-*   **Description:** 6 planes representing the board state (current player, opponent, empty, etc.).
-
----
-
-**2. Convolutional Stem**
-*   **Output Shape:** `[B, 64, 8, 8]`
-*   **Layers:**
-    *   `Conv2d(in=6, out=64, kernel=3, padding=1)`
-    *   `BatchNorm2d(64)` & `ReLU`
-*   **Parameters:**
-    *   `Conv2d`: `(3*3*6)*64 + 64 = 3,456 + 64 = 3,520`
-    *   `BatchNorm2d`: `2 * 64 = 128`
-    *   **Total for Stem: 3,648**
-
----
-
-**3. Residual Tower (4 identical blocks)**
-*   **Output Shape:** `[B, 64, 8, 8]` (maintained through all blocks)
-*   **Layers per Block:**
-    1.  `Conv2d(64, 64, kernel=3, padding=1)` + `BatchNorm2d(64)` + `ReLU`
-    2.  `Conv2d(64, 64, kernel=3, padding=1)` + `BatchNorm2d(64)`
-    3.  Skip Connection + `ReLU`
-*   **Parameters (per block):**
-    *   `Conv2d_1`: `(3*3*64)*64 + 64 = 36,864 + 64 = 36,928`
-    *   `BatchNorm2d_1`: `2 * 64 = 128`
-    *   `Conv2d_2`: `(3*3*64)*64 + 64 = 36,864 + 64 = 36,928`
-    *   `BatchNorm2d_2`: `2 * 64 = 128`
-    *   **Total per block: 74,112**
-*   **Total for Tower:** `74,112 * 4 blocks = 296,448`
-
----
-
-**4. Policy Head**
-*   **Output Shape:** `[B, 64]`
-*   **Layers:**
-    1.  `Conv2d(64, 64, kernel=1)` & `BatchNorm2d(64)` & `ReLU`
-    2.  `Flatten()` -> `[B, 64*8*8]` = `[B, 4096]`
-    3.  `Linear(in=4096, out=128)` & `ReLU`
-    4.  `Linear(in=128, out=64)`
-*   **Parameters:**
-    *   `Conv2d`: `(1*1*64)*64 + 64 = 4,096 + 64 = 4,160`
-    *   `BatchNorm2d`: `2 * 64 = 128`
-    *   `Linear_1`: `4096 * 128 + 128 = 524,288 + 128 = 524,416`
-    *   `Linear_2`: `128 * 64 + 64 = 8,192 + 64 = 8,256`
-    *   **Total for Policy Head: 536,960**
-
----
-
-**5. Value Head**
-*   **Output Shape:** `[B, 1]`
-*   **Layers:**
-    1.  `Conv2d(64, 64, kernel=1)` & `BatchNorm2d(64)` & `ReLU`
-    2.  `Flatten()` -> `[B, 4096]`
-    3.  `Linear(in=4096, out=128)` & `ReLU`
-    4.  `Linear(in=128, out=1)` & `Tanh`
-*   **Parameters:**
-    *   `Conv2d`: `(1*1*64)*64 + 64 = 4,160`
-    *   `BatchNorm2d`: `2 * 64 = 128`
-    *   `Linear_1`: `4096 * 128 + 128 = 524,416`
-    *   `Linear_2`: `128 * 1 + 1 = 129`
-    *   **Total for Value Head: 528,833**
-
----
-
-**Total Network Parameters**
-*   **Stem:** `3,648`
-*   **Residual Tower:** `296,448`
-*   **Policy Head:** `536,960`
-*   **Value Head:** `528,833`
-*   **GRAND TOTAL: 1,365,889**
-
----
 
 ## Installation
 
@@ -143,11 +55,24 @@ python train.py
 ```
 *   A `models/` directory will be created to store model checkpoints (`.pt` files).
 *   The script initiates an AlphaZero-style loop:
-    1.  **Self-Play Data Generation**: The current best model plays games against itself using MCTS. To ensure robustness, it also plays games against a pool of its own past versions. This prevents "catastrophic forgetting" and improves overall strength. The MCTS search is guided by the network's policy and informed by its value estimates.
-    2.  **Network Training**: The network is trained on the data from the self-play games. It learns to predict the MCTS-improved move probabilities (policy) and the final game outcomes (value).
-    3.  **Checkpointing**: The newly trained model is saved as `models/reversi_model_iter_X.pt`. The process automatically finds the latest model and resumes from that iteration.
+    1.  **Self-Play Data Generation**: The current best model plays games against itself using MCTS. To ensure robustness, it also plays games against a pool of its own past versions.
+    2.  **Network Training**: The network is trained on the generated data (board states, MCTS move probabilities, and game outcomes).
+    3.  **Checkpointing**: The newly trained model is saved as `models/reversi_model_iter_X.pt`.
 
-### 2. Play Against the AI (Python GUI)
+### 2. Evaluate Model Performance
+
+To benchmark models against each other and track their strength, use the evaluation script:
+
+```bash
+python evaluate.py --num_games 20
+```
+*   The script runs a comprehensive tournament to assess model performance.
+*   **Part 1 (Self-Play Tournament):** The latest model plays against itself using various strategies (e.g., MCTS with 50 sims vs. MCTS with 100 sims, Best Policy vs. MCTS).
+*   **Part 2 (Gauntlet):** The latest model is pitted against a selection of historical models from different training stages.
+*   After all games are played, it calculates and displays **ELO ratings** for every agent, providing a clear leaderboard of their relative strengths.
+*   You can control the number of games per matchup with the `--num_games` argument.
+
+### 3. Play Against the AI (Python GUI)
 
 The Pygame interface is a powerful tool for playing against and analyzing the AI.
 
@@ -157,19 +82,17 @@ python play.py
 This launches a window with the Reversi board and a detailed control panel where you can:
 *   **Choose Player Color**: Play as Black (first player) or White.
 *   **Select AI Play Style**:
-    *   `Simple Policy`: The AI makes a move instantly based on the raw output of its policy head. This is fast but weaker.
-    *   `MCTS Search`: The AI uses Monte Carlo Tree Search for a configurable number of simulations before moving. This is much stronger but takes more time to think.
-*   **Enable Hints**:
-    *   `Policy Hints`: Displays the raw policy probabilities as faint circles on legal moves.
-    *   `MCTS Hints`: Runs a full MCTS search and displays the resulting move distribution, showing which moves the AI considers strongest after deep thought.
+    *   `Simple Policy`: The AI moves instantly based on raw policy output (fast but weak).
+    *   `MCTS Search`: The AI uses Monte Carlo Tree Search (stronger but slower).
+*   **Enable Hints**: Visualize the AI's preferences using either raw policy probabilities or the refined MCTS search distribution.
 *   **Undo Move**: Go back one or two turns (to undo your move and the AI's response).
 
-### 3. Play Against the AI (Web Interface)
+### 4. Play Against the AI (Web Interface)
 
-You can play against the same AI in any modern web browser without needing Python installed on the user's machine.
+You can play against the same AI in any modern web browser.
 
 **Step 1: Export the Model to ONNX**
-The ONNX (Open Neural Network Exchange) format is a standard for machine learning models that allows them to run on various platforms. Run the export script to convert your latest PyTorch model:
+Convert your latest PyTorch model into the web-compatible ONNX format.
 
 ```bash
 python pt2onnx.py
@@ -177,7 +100,7 @@ python pt2onnx.py
 This finds the latest model in `models/` and creates a `reversi_model.onnx` file.
 
 **Step 2: Start a Local Web Server**
-Due to browser security policies, you must serve the project files from a local server. Python has a simple one built-in.
+Due to browser security policies, you must serve the project files from a local server.
 
 ```bash
 # For Python 3
@@ -189,4 +112,85 @@ Open your web browser and navigate to:
 
 **http://localhost:8000**
 
-The web interface will load, download the `reversi_model.onnx` file, and run the AI entirely in your browser using `onnxruntime-web`.
+The web interface will load, download the `.onnx` model, and run the AI entirely in your browser using `onnxruntime-web`.
+
+## AI Architecture: Policy-Value Network
+
+The brain of the AI is a single, deep `PolicyValueNet`. The architectural constants are defined as `NUM_FILTERS = 64` and `NUM_RESIDUAL_BLOCKS = 4`. The total number of learnable parameters is approximately **1.37 million**.
+
+*Parameters for a `Conv2d` layer are calculated as `(kernel_h * kernel_w * in_channels) * out_channels + out_channels_bias`. A `Linear` layer is `in_features * out_features + out_features_bias`. A `BatchNorm2d` layer has `2 * num_features` learnable parameters (gamma and beta).*
+
+---
+
+**1. Input Layer**
+*   **Shape:** `[B, 6, 8, 8]`
+*   **Description:** 6 planes representing the board state (current player, opponent, empty, etc.).
+
+---
+
+**2. Convolutional Stem**
+*   **Output Shape:** `[B, 64, 8, 8]`
+*   **Layers:**
+    *   `Conv2d(in=6, out=64, kernel=3, padding=1)`
+    *   `BatchNorm2d(64)` & `ReLU`
+*   **Parameters:**
+    *   `Conv2d`: `(3*3*6)*64 + 64 = 3,520`
+    *   `BatchNorm2d`: `2 * 64 = 128`
+    *   **Total for Stem: 3,648**
+
+---
+
+**3. Residual Tower (4 identical blocks)**
+*   **Output Shape:** `[B, 64, 8, 8]` (maintained through all blocks)
+*   **Layers per Block:**
+    1.  `Conv2d(64, 64, kernel=3, padding=1)` + `BatchNorm2d(64)` + `ReLU`
+    2.  `Conv2d(64, 64, kernel=3, padding=1)` + `BatchNorm2d(64)`
+    3.  Skip Connection + `ReLU`
+*   **Parameters (per block):**
+    *   `Conv2d_1`: `(3*3*64)*64 + 64 = 36,928`
+    *   `BatchNorm2d_1`: `2 * 64 = 128`
+    *   `Conv2d_2`: `(3*3*64)*64 + 64 = 36,928`
+    *   `BatchNorm2d_2`: `2 * 64 = 128`
+    *   **Total per block: 74,112**
+*   **Total for Tower:** `74,112 * 4 blocks = 296,448`
+
+---
+
+**4. Policy Head**
+*   **Output Shape:** `[B, 64]`
+*   **Layers:**
+    1.  `Conv2d(64, 64, kernel=1)` & `BatchNorm2d(64)` & `ReLU`
+    2.  `Flatten()` -> `[B, 64*8*8]` = `[B, 4096]`
+    3.  `Linear(in=4096, out=128)` & `ReLU`
+    4.  `Linear(in=128, out=64)`
+*   **Parameters:**
+    *   `Conv2d`: `(1*1*64)*64 + 64 = 4,160`
+    *   `BatchNorm2d`: `2 * 64 = 128`
+    *   `Linear_1`: `4096 * 128 + 128 = 524,416`
+    *   `Linear_2`: `128 * 64 + 64 = 8,256`
+    *   **Total for Policy Head: 536,960**
+
+---
+
+**5. Value Head**
+*   **Output Shape:** `[B, 1]`
+*   **Layers:**
+    1.  `Conv2d(64, 64, kernel=1)` & `BatchNorm2d(64)` & `ReLU`
+    2.  `Flatten()` -> `[B, 4096]`
+    3.  `Linear(in=4096, out=128)` & `ReLU`
+    4.  `Linear(in=128, out=1)` & `Tanh`
+*   **Parameters:**
+    *   `Conv2d`: `(1*1*64)*64 + 64 = 4,160`
+    *   `BatchNorm2d`: `2 * 64 = 128`
+    *   `Linear_1`: `4096 * 128 + 128 = 524,416`
+    *   `Linear_2`: `128 * 1 + 1 = 129`
+    *   **Total for Value Head: 528,833**
+
+---
+
+**Total Network Parameters**
+*   **Stem:** `3,648`
+*   **Residual Tower:** `296,448`
+*   **Policy Head:** `536,960`
+*   **Value Head:** `528,833`
+*   **GRAND TOTAL: 1,365,889**
