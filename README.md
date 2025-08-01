@@ -40,8 +40,8 @@ The project provides a complete ecosystem for training, analyzing, and playing w
     If you use Anaconda or Miniconda, you can create an environment with `conda`.
 
     ```bash
-    # Create a new environment named 'reversi_ai' with Python 3.10
-    conda create -n reversi_ai python=3.10
+    # Create a new environment named 'reversi_ai' with Python 3
+    conda create -n reversi_ai python=3
 
     # Activate the environment
     conda activate reversi_ai
