@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Reversi AI Analysis Tool</title>
+    <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; display: flex; flex-direction: column; align-items: center; background-color: #f0f0f0; color: #333; margin: 0; padding: 10px; }
+        .container { display: flex; flex-direction: column; align-items: center; gap: 20px; width: 100%; }
+        #game-area { display: flex; flex-direction: column; align-items: center; width: 100%; max-width: 600px; }
+        #board { width: 100%; aspect-ratio: 1 / 1; border: 2px solid black; cursor: pointer; }
+        .info-panel { margin-top: 10px; font-size: 1.1em; text-align: center; width: 100%; height: 50px; display: flex; justify-content: space-between; align-items: center;}
+        .scores { font-weight: bold; flex-basis: 33%; text-align: left; }
+        #status { flex-basis: 33%; text-align: center; }
+        .controls { border: 1px solid #ccc; padding: 15px; background-color: white; border-radius: 8px; width: 90%; max-width: 400px; box-sizing: border-box; }
+        .controls h2 { margin-top: 0; }
+        .control-group { margin-bottom: 15px; }
+        .control-group label { display: block; margin-bottom: 5px; font-weight: bold; }
+        .control-group input[type="number"], .control-group select { width: 100%; padding: 5px; box-sizing: border-box; }
+        button { padding: 10px 15px; font-size: 1em; cursor: pointer; border-radius: 5px; border: 1px solid #ccc; background-color: #e9e9e9;}
+        button:hover { background-color: #ddd; }
+        .button-group { display: flex; gap: 10px; margin-top: 15px; }
+        .explanation-link { margin-bottom: 15px; text-align: center; }
+        @media (min-width: 1024px) {
+            .container { flex-direction: row; align-items: flex-start; max-width: 1100px; }
+            .controls { width: 320px; flex-shrink: 0; }
+        }
+    </style>
+</head>
+<body>
+    <h1>Reversi AI Analysis Tool</h1>
+    <div class="container">
+        <div id="game-area">
+            <canvas id="board" width="600" height="600"></canvas>
+            <div class="info-panel">
+                <div id="scores" class="scores">Black: 2, White: 2</div>
+                <div id="status">Loading AI Model...</div>
+                <div style="flex-basis: 33%;"></div> <!-- Spacer -->
+            </div>
+        </div>
+        <div class="controls">
+            <div class="explanation-link">
+                <a href="explanation.html">How does this AI work?</a>
+            </div>
+            
+            <h2>Game Options</h2>
+            <div class="control-group">
+                <label for="player-color">I want to play as:</label>
+                <select id="player-color"><option value="-1" selected>Black (Starts First)</option><option value="1">White</option></select>
+            </div>
+            <div class="control-group">
+                <label for="show-legal">Show Legal Moves:</label>
+                <select id="show-legal"><option value="true" selected>Yes</option><option value="false">No</option></select>
+            </div>
+            <div class="control-group">
+                <label for="ai-mode">AI Play Style:</label>
+                <select id="ai-mode"><option value="policy" selected>Simple Policy Probabilities</option><option value="mcts">MCTS Search</option></select>
+            </div>
+            <div class="control-group">
+                <label for="mcts-sims">MCTS Simulations (if enabled):</label>
+                <input type="number" id="mcts-sims" value="200" min="10" step="10">
+            </div>
+             <div class="control-group">
+                <label for="hint-mode">Show Hints Using:</label>
+                <select id="hint-mode"><option value="none" selected>No Hints</option><option value="policy">Simple Policy Probabilities</option><option value="mcts">MCTS Search</option></select>
+            </div>
+            <div class="button-group">
+                <button id="restart-btn">New Game</button>
+                <button id="undo-btn">Undo</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/onnxruntime-web/dist/ort.min.js"></script>
+    <script src="reversi.js"></script>
+</body>
+</html>
