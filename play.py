@@ -229,7 +229,7 @@ def draw_control_panel(screen, ui_elements_with_labels, status_text, scores):
     panel_rect = pygame.Rect(BOARD_WIDTH, 0, CONTROL_PANEL_WIDTH, WINDOW_HEIGHT)
     pygame.draw.rect(screen, UI_BG_COLOR, panel_rect)
 
-    title_surf = TITLE_FONT.render("Reversi AI Analysis Tool", True, WHITE)
+    title_surf = TITLE_FONT.render("Reversi AI", True, WHITE)
     screen.blit(title_surf, (BOARD_WIDTH + (CONTROL_PANEL_WIDTH - title_surf.get_width()) / 2, 20))
 
     status_surf = STATUS_FONT.render(status_text, True, UI_FONT_COLOR)
@@ -260,7 +260,7 @@ def draw_control_panel(screen, ui_elements_with_labels, status_text, scores):
 # --- Main Game Loop ---
 def main():
     screen = pygame.display.set_mode((WINDOW_WIDTH, WINDOW_HEIGHT))
-    pygame.display.set_caption("Reversi AI Analysis Tool")
+    pygame.display.set_caption("Reversi AI")
     
     game = Reversi()
     board_history = []
@@ -314,14 +314,11 @@ def main():
             for el in ui_elements:
                 if isinstance(el, Button): el.handle_event(event)
 
-            # --- CORRECTED Human Move Logic ---
             if not game_over and game.current_player == human_player and event.type == pygame.MOUSEBUTTONDOWN and mouse_pos[0] < BOARD_WIDTH:
                 c, r = mouse_pos[0] // SQUARE_SIZE, mouse_pos[1] // SQUARE_SIZE
                 if (r, c) in game.get_legal_moves(human_player):
-                    # 1. Make the move and update state
                     game.make_move(r, c, human_player); board_history.append(np.copy(game.board)); player_history.append(game.current_player); hints = {}
                     
-                    # 2. Immediately redraw the board to show the human's move
                     status_text = "AI is thinking..."
                     scores = {"black": np.sum(game.board == -1), "white": np.sum(game.board == 1)}
                     draw_board_and_pieces(screen, game, human_player, legal_moves_dd.get_value(), hints)
@@ -329,11 +326,9 @@ def main():
                     for el in ui_elements:
                         if isinstance(el, Dropdown): el.draw_options(screen)
                     
-                    # 3. Update the display and pause
                     pygame.display.flip()
-                    pygame.time.wait(500) # Pause for 0.5 seconds
+                    pygame.time.wait(500)
 
-        # --- Game Logic (AI turn, checks, etc.) ---
         if not game_over:
             if not game.get_legal_moves(game.current_player):
                 if game.get_legal_moves(-game.current_player):
@@ -358,7 +353,6 @@ def main():
                     elif hint_mode == 'mcts':
                         n_sims = sims_dd.get_value(); mcts.search(game, n_sims); hints = mcts.get_policy_distribution()
         
-        # --- Update Status & Final Draw for the frame ---
         if game_over:
             winner = game.get_winner()
             status_text = "You Won!" if winner == human_player else "AI Won!" if winner == -human_player else "It's a Draw!"

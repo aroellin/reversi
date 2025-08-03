@@ -5,6 +5,9 @@ const scoresEl = document.getElementById('scores');
 const statusEl = document.getElementById('status');
 const restartBtn = document.getElementById('restart-btn');
 const undoBtn = document.getElementById('undo-btn');
+const editBtn = document.getElementById('edit-btn');
+const resumeWhiteBtn = document.getElementById('resume-white-btn');
+const resumeBlackBtn = document.getElementById('resume-black-btn');
 
 const BOARD_SIZE = 8;
 const EMPTY = 0;
@@ -15,13 +18,14 @@ let boardHistory = [];
 let playerHistory = [];
 let gameOver = false;
 let humanPlayer = -1;
+let editMode = false;
 let aiThinking = false;
 
 // --- Options ---
 let options = {
     showLegalMoves: true,
-    aiMode: 'policy',
-    mctsSims: 200,
+    aiMode: 'mcts',
+    mctsSims: 400,
     hintMode: 'none'
 };
 
@@ -114,7 +118,14 @@ function initializeGame() {
     boardHistory = [newBoard];
     playerHistory = [-1];
     gameOver = false;
+    editMode = false;
     aiThinking = false;
+
+    // Ensure button visibility is reset to the default state
+    editBtn.style.display = 'inline-block';
+    resumeWhiteBtn.style.display = 'none';
+    resumeBlackBtn.style.display = 'none';
+
     gameLoop();
 }
 function getCurrentBoard() { return boardHistory[boardHistory.length - 1]; }
@@ -151,6 +162,20 @@ function makeMoveAndGetNewBoard(board, r, c, player) {
     }
     return newBoard;
 }
+
+function handleBoardEdit(r, c) {
+    if (r < 0 || r >= BOARD_SIZE || c < 0 || c >= BOARD_SIZE) return;
+    const board = getCurrentBoard();
+
+    // Cycle piece: Empty -> White -> Black -> Empty
+    if (board[r][c] === EMPTY) board[r][c] = 1;      // Empty -> White
+    else if (board[r][c] === 1) board[r][c] = -1;    // White -> Black
+    else board[r][c] = 0;                            // Black -> Empty
+    
+    drawBoard(null); // Redraw without hints
+    updateInfoPanel(); // Update scores
+}
+
 function handleHumanMove(r, c) {
     if (gameOver || aiThinking || getCurrentPlayer() !== humanPlayer) return;
     const legalMoves = getLegalMoves(getCurrentBoard(), getCurrentPlayer());
@@ -172,6 +197,8 @@ function undoMove() {
 
 // REFACTORED: The main game loop with robust state handling
 async function gameLoop() {
+    if (editMode) return; // Halt game logic while in edit mode
+
     updateDisplay(false); // Update the basic UI (board, scores, status)
     
     const board = getCurrentBoard();
@@ -243,6 +270,21 @@ function drawBoard(hints) {
         ctx.moveTo(0, i * squareSize); ctx.lineTo(canvas.width, i * squareSize);
         ctx.strokeStyle = 'black'; ctx.lineWidth = 1; ctx.stroke();
     }
+
+    // --- ADDED: Draw professional board markings ---
+    const dotRadius = squareSize / 20;
+    // The dots are at the intersections of lines 2 & 6
+    const dotLocations = [{r: 2, c: 2}, {r: 2, c: 6}, {r: 6, c: 2}, {r: 6, c: 6}];
+    ctx.fillStyle = 'black'; // Use the same color as the grid lines
+    for (const loc of dotLocations) {
+        const centerX = loc.c * squareSize;
+        const centerY = loc.r * squareSize;
+        ctx.beginPath();
+        ctx.arc(centerX, centerY, dotRadius, 0, 2 * Math.PI);
+        ctx.fill();
+    }
+    // --- END ADDED CODE ---
+
     const board = getCurrentBoard();
     const legalMoves = (options.showLegalMoves && getCurrentPlayer() === humanPlayer) ? getLegalMoves(board, getCurrentPlayer()) : [];
     
@@ -285,6 +327,11 @@ function updateInfoPanel() {
     const blackLabel = humanPlayer === -1 ? "Human (B)" : "AI (B)";
     const whiteLabel = humanPlayer === 1 ? "Human (W)" : "AI (W)";
     scoresEl.textContent = `${blackLabel}: ${blackScore}, ${whiteLabel}: ${whiteScore}`;
+    
+    if (editMode) {
+        statusEl.textContent = 'Board Edit Mode. Click squares to change pieces.';
+        return;
+    }
     if (gameOver) {
         let message = `Game Over! `;
         if (blackScore > whiteScore) message += `${blackLabel} Wins!`;
@@ -342,15 +389,89 @@ function createInputPlanes(board, player) {
     return planes;
 }
 
+// --- NEW/MODIFIED Event Handler Functions ---
+
+function changePlayerColor(newColor) {
+    humanPlayer = newColor;
+    aiThinking = false; // Stop any ongoing thinking
+
+    if (editMode) {
+        // If in edit mode, just update the UI text and do nothing else.
+        // The board and edit-mode state are preserved.
+        updateInfoPanel();
+        return;
+    }
+    
+    // If in a regular game, don't reset the board. Just re-evaluate the turn.
+    // The game state (board, current player) is preserved.
+    gameLoop();
+}
+
+function handleNewGameClick() {
+    if (editMode) {
+        // If in edit mode, just reset the board to the start position but REMAIN in edit mode.
+        const newBoard = createBoard();
+        newBoard[3][3] = 1; newBoard[4][4] = 1;
+        newBoard[3][4] = -1; newBoard[4][3] = -1;
+        // Replace the current board state being edited
+        boardHistory[boardHistory.length - 1] = newBoard;
+        drawBoard(null);
+        updateInfoPanel();
+    } else {
+        // Standard behavior: a full, hard reset of the game.
+        initializeGame();
+    }
+}
+
+function enterEditMode() {
+    editMode = true;
+    aiThinking = false; // Stop any ongoing AI or hint calculations
+
+    // Toggle button visibility
+    editBtn.style.display = 'none';
+    resumeWhiteBtn.style.display = 'inline-block';
+    resumeBlackBtn.style.display = 'inline-block';
+
+    // Update UI and halt game
+    updateInfoPanel();
+    drawBoard(null); // Redraw to remove any existing hints
+}
+
+function exitEditMode(nextPlayer) {
+    editMode = false;
+
+    // Toggle button visibility back to normal
+    editBtn.style.display = 'inline-block';
+    resumeWhiteBtn.style.display = 'none';
+    resumeBlackBtn.style.display = 'none';
+
+    // Reset game state with the newly edited board
+    const editedBoard = getCurrentBoard();
+    // CRITICAL: Reset history, creating a deep copy of the edited board as the new starting point
+    boardHistory = [editedBoard.map(row => row.slice())];
+    playerHistory = [nextPlayer];
+    gameOver = false;
+    aiThinking = false;
+
+    // Resume the game from the new state
+    gameLoop();
+}
+
+
 // --- Event Listeners ---
 function setupEventListeners() {
-    document.getElementById('player-color').addEventListener('change', (e) => { humanPlayer = parseInt(e.target.value); initializeGame(); });
+    // MODIFIED: 'player-color' listener now calls the new, non-destructive function.
+    document.getElementById('player-color').addEventListener('change', (e) => changePlayerColor(parseInt(e.target.value)));
     document.getElementById('show-legal').addEventListener('change', (e) => { options.showLegalMoves = e.target.value === 'true'; gameLoop(); });
     document.getElementById('ai-mode').addEventListener('change', (e) => { options.aiMode = e.target.value; });
     document.getElementById('mcts-sims').addEventListener('change', (e) => { options.mctsSims = parseInt(e.target.value) || 200; });
     document.getElementById('hint-mode').addEventListener('change', (e) => { options.hintMode = e.target.value; gameLoop(); });
-    restartBtn.addEventListener('click', initializeGame);
+    // MODIFIED: 'restart-btn' listener now calls a context-aware handler.
+    restartBtn.addEventListener('click', handleNewGameClick);
     undoBtn.addEventListener('click', undoMove);
+    editBtn.addEventListener('click', enterEditMode);
+    resumeWhiteBtn.addEventListener('click', () => exitEditMode(1)); // 1 for White
+    resumeBlackBtn.addEventListener('click', () => exitEditMode(-1)); // -1 for Black
     const handleCanvasInput = (event) => {
         event.preventDefault();
         const rect = canvas.getBoundingClientRect();
@@ -365,7 +486,11 @@ function setupEventListeners() {
         }
         const c = Math.floor(x / squareSize);
         const r = Math.floor(y / squareSize);
-        handleHumanMove(r, c);
+        if (editMode) {
+            handleBoardEdit(r, c);
+        } else {
+            handleHumanMove(r, c);
+        }
     };
     canvas.addEventListener('click', handleCanvasInput);
     canvas.addEventListener('touchstart', handleCanvasInput);

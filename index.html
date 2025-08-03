@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Reversi AI Analysis Tool</title>
+    <title>Reversi AI</title>
     <style>
         body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; display: flex; flex-direction: column; align-items: center; background-color: #f0f0f0; color: #333; margin: 0; padding: 10px; }
         .container { display: flex; flex-direction: column; align-items: center; gap: 20px; width: 100%; }
@@ -28,7 +28,7 @@
     </style>
 </head>
 <body>
-    <h1>Reversi AI Analysis Tool</h1>
+    <h1>Reversi AI</h1>
     <div class="container">
         <div id="game-area">
             <canvas id="board" width="600" height="600"></canvas>
@@ -54,19 +54,24 @@
             </div>
             <div class="control-group">
                 <label for="ai-mode">AI Play Style:</label>
-                <select id="ai-mode"><option value="policy" selected>Simple Policy Probabilities</option><option value="mcts">MCTS Search</option></select>
+                <select id="ai-mode"><option value="policy">Simple Policy Probabilities</option><option value="mcts" selected>MCTS Search</option></select>
             </div>
             <div class="control-group">
                 <label for="mcts-sims">MCTS Simulations (if enabled):</label>
-                <input type="number" id="mcts-sims" value="200" min="10" step="10">
+                <input type="number" id="mcts-sims" value="400" min="10" step="10">
             </div>
              <div class="control-group">
-                <label for="hint-mode">Show Hints Using:</label>
+                <label for="hint-mode">Show Player Hints Using:</label>
                 <select id="hint-mode"><option value="none" selected>No Hints</option><option value="policy">Simple Policy Probabilities</option><option value="mcts">MCTS Search</option></select>
             </div>
             <div class="button-group">
                 <button id="restart-btn">New Game</button>
                 <button id="undo-btn">Undo</button>
+            </div>
+            <div class="button-group" style="margin-top: 10px;">
+                <button id="edit-btn">Edit Board</button>
+                <button id="resume-white-btn" style="display: none;">White Next</button>
+                <button id="resume-black-btn" style="display: none;">Black Next</button>
             </div>
         </div>
     </div>
