@@ -191,11 +191,6 @@ def get_policy_move(model, game):
     best_move_index = torch.argmax(legal_logits).item()
     return legal_moves[best_move_index]
 
-def get_win_chance(model, game):
-    state_np = game.get_input_planes(game.current_player); state_tensor = torch.from_numpy(state_np).float().unsqueeze(0).to(device)
-    with torch.no_grad(): _, value = model(state_tensor)
-    return (value.item() + 1) / 2
-
 # --- Drawing Functions ---
 def draw_board_and_pieces(screen, game, human_player, show_legal_moves, hints):
     board_area = pygame.Rect(0, 0, BOARD_WIDTH, BOARD_WIDTH)
@@ -204,6 +199,12 @@ def draw_board_and_pieces(screen, game, human_player, show_legal_moves, hints):
         pygame.draw.line(screen, BLACK, (x * SQUARE_SIZE, 0), (x * SQUARE_SIZE, BOARD_WIDTH), 2)
         pygame.draw.line(screen, BLACK, (0, x * SQUARE_SIZE), (BOARD_WIDTH, x * SQUARE_SIZE), 2)
     
+    # Draw professional board markings
+    dot_radius = int(SQUARE_SIZE / 20)
+    dot_locations = [(2, 2), (2, 6), (6, 2), (6, 6)]
+    for r_idx, c_idx in dot_locations:
+        pygame.draw.circle(screen, BLACK, (c_idx * SQUARE_SIZE, r_idx * SQUARE_SIZE), dot_radius)
+
     if hints and game.current_player == human_player:
         max_hint = max(hints.values()) if hints else 0
         if max_hint > 0:
@@ -225,11 +226,11 @@ def draw_board_and_pieces(screen, game, human_player, show_legal_moves, hints):
             elif (r, c) in legal_moves and game.current_player == human_player:
                 pygame.draw.circle(screen, LEGAL_MOVE_COLOR, (int(c*SQUARE_SIZE + SQUARE_SIZE/2), int(r*SQUARE_SIZE + SQUARE_SIZE/2)), RADIUS / 4)
 
-def draw_control_panel(screen, ui_elements_with_labels, status_text, scores):
+def draw_control_panel(screen, ui_elements_with_labels, status_text, scores, edit_mode):
     panel_rect = pygame.Rect(BOARD_WIDTH, 0, CONTROL_PANEL_WIDTH, WINDOW_HEIGHT)
     pygame.draw.rect(screen, UI_BG_COLOR, panel_rect)
 
-    title_surf = TITLE_FONT.render("Reversi AI", True, WHITE)
+    title_surf = TITLE_FONT.render("Reversi AI Analysis Tool", True, WHITE)
     screen.blit(title_surf, (BOARD_WIDTH + (CONTROL_PANEL_WIDTH - title_surf.get_width()) / 2, 20))
 
     status_surf = STATUS_FONT.render(status_text, True, UI_FONT_COLOR)
@@ -241,7 +242,13 @@ def draw_control_panel(screen, ui_elements_with_labels, status_text, scores):
     screen.blit(score_w_surf, (BOARD_WIDTH + CONTROL_PANEL_WIDTH - score_w_surf.get_width() - 20, 80))
     
     y_offset = 120
-    for label_text, element_or_group in ui_elements_with_labels:
+    for label_text, element_or_group, is_edit_button in ui_elements_with_labels:
+        # Determine if the element should be drawn
+        should_draw = True
+        if is_edit_button == 'edit_only' and not edit_mode: should_draw = False
+        if is_edit_button == 'play_only' and edit_mode: should_draw = False
+        if not should_draw: continue
+
         if label_text:
             label_surf = LABEL_FONT.render(label_text, True, UI_FONT_COLOR)
             screen.blit(label_surf, (BOARD_WIDTH + 20, y_offset))
@@ -260,31 +267,61 @@ def draw_control_panel(screen, ui_elements_with_labels, status_text, scores):
 # --- Main Game Loop ---
 def main():
     screen = pygame.display.set_mode((WINDOW_WIDTH, WINDOW_HEIGHT))
-    pygame.display.set_caption("Reversi AI")
+    pygame.display.set_caption("Reversi AI Analysis Tool")
     
     game = Reversi()
     board_history = []
     player_history = []
     human_player = -1
     game_over = False
+    edit_mode = False
     status_text = "Loading Model..."
     hints = {}
     
     def new_game():
-        nonlocal game, board_history, player_history, game_over, human_player, hints
-        human_player = player_color_dd.get_value()
-        game.new_game(); board_history = [np.copy(game.board)]; player_history = [game.current_player]
-        game_over = False; hints = {}
+        nonlocal game, board_history, player_history, game_over, human_player, hints, edit_mode
+        game.new_game()
+        board_history = [np.copy(game.board)]
+        player_history = [game.current_player]
+        game_over = False
+        edit_mode = False
+        hints = {}
         pygame.display.set_caption(f"Reversi - {'You (B)' if human_player == -1 else 'AI (B)'} vs {'AI (W)' if human_player == 1 else 'You (W)'}")
 
     def undo_move():
         nonlocal game, board_history, player_history, game_over, hints
-        if len(board_history) > 1:
+        if len(board_history) > 1 and not edit_mode:
             board_history.pop(); player_history.pop()
             if player_history and player_history[-1] == -human_player and len(board_history) > 1:
                  board_history.pop(); player_history.pop()
             game.board = np.copy(board_history[-1]); game.current_player = player_history[-1]
             game_over = False; hints = {}
+            
+    def handle_new_game_click():
+        nonlocal edit_mode
+        if edit_mode:
+            game.new_game() # Reset board but stay in edit mode
+        else:
+            new_game() # Full reset
+
+    def change_player_color(new_color):
+        nonlocal human_player, hints
+        human_player = new_color
+        hints = {} # Reset hints on any color change
+
+    def enter_edit_mode():
+        nonlocal edit_mode, hints
+        edit_mode = True
+        hints = {}
+    
+    def exit_edit_mode(next_player):
+        nonlocal edit_mode, game_over, board_history, player_history, hints
+        edit_mode = False
+        game.current_player = next_player
+        board_history = [np.copy(game.board)]
+        player_history = [game.current_player]
+        game_over = False
+        hints = {}
 
     # --- GUI Element Initialization ---
     dd_height, btn_height = 30, 40
@@ -293,75 +330,118 @@ def main():
     hint_mode_dd = Dropdown(BOARD_WIDTH + 20, 0, CONTROL_PANEL_WIDTH - 40, dd_height, OPTION_FONT, {"none": "No Hints", "mcts": "MCTS Hints", "policy": "Policy Hints"}, "none")
     sims_dd = Dropdown(BOARD_WIDTH + 20, 0, CONTROL_PANEL_WIDTH - 40, dd_height, OPTION_FONT, {50: "50 Sims", 100: "100 Sims", 200: "200 Sims", 400: "400 Sims"}, 200)
     legal_moves_dd = Dropdown(BOARD_WIDTH + 20, 0, CONTROL_PANEL_WIDTH - 40, dd_height, OPTION_FONT, {True: "Show Legal Moves", False: "Hide Legal Moves"}, True)
-    new_game_btn = Button(BOARD_WIDTH + 20, 0, (CONTROL_PANEL_WIDTH - 50) / 2, btn_height, OPTION_FONT, "New Game", new_game)
+    
+    new_game_btn = Button(BOARD_WIDTH + 20, 0, (CONTROL_PANEL_WIDTH - 50) / 2, btn_height, OPTION_FONT, "New Game", handle_new_game_click)
     undo_btn = Button(BOARD_WIDTH + 30 + (CONTROL_PANEL_WIDTH - 50) / 2, 0, (CONTROL_PANEL_WIDTH - 50) / 2, btn_height, OPTION_FONT, "Undo", undo_move)
-    ui_elements_with_labels = [("Play As:", player_color_dd), ("AI Play Style:", ai_mode_dd), ("Show Hints Using:", hint_mode_dd), ("MCTS Simulations:", sims_dd), ("Legal Moves:", legal_moves_dd), (None, (new_game_btn, undo_btn))]
-    ui_elements = [el for _, group in ui_elements_with_labels for el in (group if isinstance(group, tuple) else (group,))]
+    edit_btn = Button(BOARD_WIDTH + 20, 0, CONTROL_PANEL_WIDTH - 40, btn_height, OPTION_FONT, "Edit Board", enter_edit_mode)
+    resume_white_btn = Button(BOARD_WIDTH + 20, 0, (CONTROL_PANEL_WIDTH - 50) / 2, btn_height, OPTION_FONT, "White Next", lambda: exit_edit_mode(1))
+    resume_black_btn = Button(BOARD_WIDTH + 30 + (CONTROL_PANEL_WIDTH - 50) / 2, 0, (CONTROL_PANEL_WIDTH - 50) / 2, btn_height, OPTION_FONT, "Black Next", lambda: exit_edit_mode(-1))
+    
+    # Label, Element, Edit/Play Mode flag
+    ui_elements_with_labels = [
+        ("Play As:", player_color_dd, 'all'), 
+        ("AI Play Style:", ai_mode_dd, 'all'), 
+        ("Show Player Hints Using:", hint_mode_dd, 'all'), 
+        ("MCTS Simulations:", sims_dd, 'all'), 
+        ("Legal Moves:", legal_moves_dd, 'all'), 
+        (None, (new_game_btn, undo_btn), 'all'),
+        (None, edit_btn, 'play_only'),
+        (None, (resume_white_btn, resume_black_btn), 'edit_only')
+    ]
+    ui_elements = [el for _, group, _ in ui_elements_with_labels for el in (group if isinstance(group, tuple) else (group,))]
 
     model = load_model()
     mcts = MCTS(model, c_puct=1.0)
-    new_game()
+    new_game() # Perform initial full setup
     
     running = True
     while running:
         mouse_pos = pygame.mouse.get_pos()
+        # --- Handle Events ---
         for event in pygame.event.get():
             if event.type == pygame.QUIT: running = False
 
-            dropdown_clicked = any(el.handle_event(event) for el in ui_elements if isinstance(el, Dropdown))
-            if dropdown_clicked: continue
+            # Handle dropdowns and non-destructive color change
+            old_color = player_color_dd.get_value()
+            dropdown_changed = any(el.handle_event(event) for el in ui_elements if isinstance(el, Dropdown))
+            if dropdown_changed:
+                new_color = player_color_dd.get_value()
+                if old_color != new_color:
+                    change_player_color(new_color)
+                continue # Skip other processing for this event
 
-            for el in ui_elements:
-                if isinstance(el, Button): el.handle_event(event)
+            # Handle buttons
+            if not edit_mode:
+                new_game_btn.handle_event(event)
+                undo_btn.handle_event(event)
+                edit_btn.handle_event(event)
+            else: # In edit mode
+                new_game_btn.handle_event(event) # New game button has special logic
+                resume_white_btn.handle_event(event)
+                resume_black_btn.handle_event(event)
 
-            if not game_over and game.current_player == human_player and event.type == pygame.MOUSEBUTTONDOWN and mouse_pos[0] < BOARD_WIDTH:
+            # Handle board clicks (Human Move or Board Edit)
+            if event.type == pygame.MOUSEBUTTONDOWN and mouse_pos[0] < BOARD_WIDTH:
                 c, r = mouse_pos[0] // SQUARE_SIZE, mouse_pos[1] // SQUARE_SIZE
-                if (r, c) in game.get_legal_moves(human_player):
-                    game.make_move(r, c, human_player); board_history.append(np.copy(game.board)); player_history.append(game.current_player); hints = {}
-                    
-                    status_text = "AI is thinking..."
-                    scores = {"black": np.sum(game.board == -1), "white": np.sum(game.board == 1)}
-                    draw_board_and_pieces(screen, game, human_player, legal_moves_dd.get_value(), hints)
-                    draw_control_panel(screen, ui_elements_with_labels, status_text, scores)
-                    for el in ui_elements:
-                        if isinstance(el, Dropdown): el.draw_options(screen)
-                    
-                    pygame.display.flip()
-                    pygame.time.wait(500)
+                if edit_mode:
+                    # Cycle piece: 0->1, 1->-1, -1->0
+                    current_piece = game.board[r, c]
+                    if current_piece == 0: game.board[r, c] = 1
+                    elif current_piece == 1: game.board[r, c] = -1
+                    else: game.board[r, c] = 0
+                elif not game_over and game.current_player == human_player:
+                    if (r, c) in game.get_legal_moves(human_player):
+                        game.make_move(r, c, human_player); board_history.append(np.copy(game.board)); player_history.append(game.current_player); hints = {}
+                        status_text = "AI is thinking..."
+                        scores = {"black": np.sum(game.board == -1), "white": np.sum(game.board == 1)}
+                        draw_board_and_pieces(screen, game, human_player, legal_moves_dd.get_value(), hints)
+                        draw_control_panel(screen, ui_elements_with_labels, status_text, scores, edit_mode)
+                        for el in ui_elements:
+                            if isinstance(el, Dropdown): el.draw_options(screen)
+                        pygame.display.flip()
+                        pygame.time.wait(200)
 
-        if not game_over:
-            if not game.get_legal_moves(game.current_player):
-                if game.get_legal_moves(-game.current_player):
-                    game.current_player *= -1; player_history.append(game.current_player); board_history.append(np.copy(game.board))
-                else: game_over = True
-            
-            if not game_over and game.current_player == -human_player:
-                ai_mode, n_sims = ai_mode_dd.get_value(), sims_dd.get_value()
-                ai_move = get_policy_move(model, game) if ai_mode == 'policy' else (mcts.search(game, n_sims) or mcts.get_best_move())
+        # --- Game Logic (only runs if not in edit mode) ---
+        if not edit_mode:
+            if not game_over:
+                if not game.get_legal_moves(game.current_player):
+                    if game.get_legal_moves(-game.current_player):
+                        game.current_player *= -1; player_history.append(game.current_player); board_history.append(np.copy(game.board))
+                    else: game_over = True
                 
-                if ai_move:
-                    game.make_move(ai_move[0], ai_move[1], -human_player); board_history.append(np.copy(game.board)); player_history.append(game.current_player)
-            
-            elif not game_over and game.current_player == human_player:
-                hint_mode = hint_mode_dd.get_value()
-                if hint_mode != 'none' and not hints:
-                    status_text = f"Calculating hints..."
-                    draw_control_panel(screen, ui_elements_with_labels, status_text, {"black": np.sum(game.board == -1), "white": np.sum(game.board == 1)})
-                    pygame.display.update(pygame.Rect(BOARD_WIDTH, 0, CONTROL_PANEL_WIDTH, WINDOW_HEIGHT))
+                if not game_over and game.current_player == -human_player:
+                    ai_mode, n_sims = ai_mode_dd.get_value(), sims_dd.get_value()
+                    ai_move = get_policy_move(model, game) if ai_mode == 'policy' else (mcts.search(game, n_sims) or mcts.get_best_move())
+                    
+                    if ai_move:
+                        game.make_move(ai_move[0], ai_move[1], -human_player); board_history.append(np.copy(game.board)); player_history.append(game.current_player)
+                
+                elif not game_over and game.current_player == human_player:
+                    hint_mode = hint_mode_dd.get_value()
+                    if hint_mode != 'none' and not hints:
+                        status_text = f"Calculating hints..."
+                        draw_control_panel(screen, ui_elements_with_labels, status_text, {"black": np.sum(game.board == -1), "white": np.sum(game.board == 1)}, edit_mode)
+                        pygame.display.update(pygame.Rect(BOARD_WIDTH, 0, CONTROL_PANEL_WIDTH, WINDOW_HEIGHT))
 
-                    if hint_mode == 'policy': hints, _ = mcts._get_priors_and_value(game)
-                    elif hint_mode == 'mcts':
-                        n_sims = sims_dd.get_value(); mcts.search(game, n_sims); hints = mcts.get_policy_distribution()
+                        if hint_mode == 'policy': hints, _ = mcts._get_priors_and_value(game)
+                        elif hint_mode == 'mcts':
+                            n_sims = sims_dd.get_value(); mcts.search(game, n_sims); hints = mcts.get_policy_distribution()
         
-        if game_over:
+        # --- Update Status Text ---
+        if edit_mode:
+            status_text = "Board Edit Mode"
+        elif game_over:
             winner = game.get_winner()
             status_text = "You Won!" if winner == human_player else "AI Won!" if winner == -human_player else "It's a Draw!"
-        elif game.current_player == human_player: status_text = "Your Turn"
-        else: status_text = "AI is thinking..."
+        elif game.current_player == human_player:
+            status_text = "Your Turn"
+        else:
+            status_text = "AI is thinking..."
         
+        # --- Final Draw for the frame ---
         scores = {"black": np.sum(game.board == -1), "white": np.sum(game.board == 1)}
         draw_board_and_pieces(screen, game, human_player, legal_moves_dd.get_value(), hints)
-        draw_control_panel(screen, ui_elements_with_labels, status_text, scores)
+        draw_control_panel(screen, ui_elements_with_labels, status_text, scores, edit_mode)
         for el in ui_elements:
             if isinstance(el, Dropdown): el.draw_options(screen)
 
