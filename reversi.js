@@ -1,6 +1,7 @@
 // --- Global DOM elements and Constants ---
 const canvas = document.getElementById('board');
 const ctx = canvas.getContext('2d');
+const piecesLayer = document.getElementById('pieces-layer');
 const scoresEl = document.getElementById('scores');
 const statusEl = document.getElementById('status');
 const restartBtn = document.getElementById('restart-btn');
@@ -20,6 +21,8 @@ let gameOver = false;
 let humanPlayer = -1;
 let editMode = false;
 let aiThinking = false;
+let lastRenderedBoard = null;
+let domPieces = null;
 
 // --- Options ---
 let options = {
@@ -285,7 +288,7 @@ function drawBoard(hints) {
     }
     // --- END ADDED CODE ---
 
-    const board = getCurrentBoard();
+	const board = getCurrentBoard();
     const legalMoves = (options.showLegalMoves && getCurrentPlayer() === humanPlayer) ? getLegalMoves(board, getCurrentPlayer()) : [];
     
     if (hints) {
@@ -303,22 +306,91 @@ function drawBoard(hints) {
             }
         }
     }
-    for (let r = 0; r < 8; r++) {
-        for (let c = 0; c < 8; c++) {
-            const piece = board[r][c];
-            if (piece !== EMPTY) {
-                ctx.beginPath();
-                ctx.arc(c * squareSize + squareSize / 2, r * squareSize + squareSize / 2, pieceRadius, 0, 2 * Math.PI);
-                ctx.fillStyle = piece === 1 ? 'white' : 'black';
-                ctx.fill();
-            } else if (legalMoves.some(m => m.r === r && m.c === c)) {
-                ctx.beginPath();
-                ctx.arc(c * squareSize + squareSize / 2, r * squareSize + squareSize / 2, pieceRadius / 4, 0, 2 * Math.PI);
-                ctx.fillStyle = 'rgba(0, 0, 0, 0.3)';
-                ctx.fill();
-            }
-        }
-    }
+	for (let r = 0; r < 8; r++) {
+		for (let c = 0; c < 8; c++) {
+			const piece = board[r][c];
+			if (piece === EMPTY && legalMoves.some(m => m.r === r && m.c === c)) {
+				ctx.beginPath();
+				ctx.arc(c * squareSize + squareSize / 2, r * squareSize + squareSize / 2, pieceRadius / 4, 0, 2 * Math.PI);
+				ctx.fillStyle = 'rgba(0, 0, 0, 0.3)';
+				ctx.fill();
+			}
+		}
+	}
+
+	// Render 3D DOM pieces with flip animations on top of the canvas
+	renderPieces(lastRenderedBoard, board);
+	// Store a deep copy to detect future diffs without mutation issues
+	lastRenderedBoard = board.map(row => row.slice());
+}
+
+function ensurePiecesGridInitialized() {
+	if (!piecesLayer) return;
+	if (domPieces) return;
+	domPieces = Array.from({ length: BOARD_SIZE }, () => Array(BOARD_SIZE).fill(null));
+	piecesLayer.innerHTML = '';
+	for (let r = 0; r < BOARD_SIZE; r++) {
+		for (let c = 0; c < BOARD_SIZE; c++) {
+			const cell = document.createElement('div');
+			cell.className = 'cell';
+			const piece = document.createElement('div');
+			piece.className = 'piece3d';
+			piece.style.display = 'none';
+			const inner = document.createElement('div');
+			inner.className = 'piece-inner';
+			const faceBlack = document.createElement('div');
+			faceBlack.className = 'piece-face black';
+			const faceWhite = document.createElement('div');
+			faceWhite.className = 'piece-face white';
+			inner.appendChild(faceBlack);
+			inner.appendChild(faceWhite);
+			piece.appendChild(inner);
+			cell.appendChild(piece);
+			piecesLayer.appendChild(cell);
+			domPieces[r][c] = piece;
+		}
+	}
+}
+
+function renderPieces(prevBoard, currentBoard) {
+	if (!piecesLayer) return;
+	ensurePiecesGridInitialized();
+	for (let r = 0; r < BOARD_SIZE; r++) {
+		for (let c = 0; c < BOARD_SIZE; c++) {
+			const piece = domPieces[r][c];
+			const currVal = currentBoard[r][c];
+			const prevVal = prevBoard ? prevBoard[r][c] : EMPTY;
+			if (currVal === EMPTY) {
+				piece.style.display = 'none';
+				piece.classList.remove('black', 'white', 'pop');
+				continue;
+			}
+			const targetColor = currVal === 1 ? 'white' : 'black';
+			const prevColor = prevVal === 1 ? 'white' : prevVal === -1 ? 'black' : 'empty';
+			piece.style.display = 'block';
+			if (prevColor === 'empty') {
+				piece.classList.remove('black', 'white');
+				piece.classList.add(targetColor, 'pop');
+				piece.addEventListener('animationend', () => piece.classList.remove('pop'), { once: true });
+			} else if (prevColor !== targetColor) {
+				// Set to prevColor, then to targetColor on next frame to trigger transition
+				piece.classList.remove('black', 'white');
+				piece.classList.add(prevColor);
+				// Force reflow to ensure the browser registers the state before transition
+				void piece.offsetWidth;
+				requestAnimationFrame(() => {
+					piece.classList.remove('black', 'white');
+					piece.classList.add(targetColor);
+				});
+			} else {
+				// Ensure class is correct without animation
+				if (!piece.classList.contains(targetColor)) {
+					piece.classList.remove('black', 'white');
+					piece.classList.add(targetColor);
+				}
+			}
+		}
+	}
 }
 function updateInfoPanel() {
     const board = getCurrentBoard();
@@ -500,5 +572,6 @@ function setupEventListeners() {
 // --- Start Application ---
 loadModel().then(() => {
     setupEventListeners();
+    ensurePiecesGridInitialized();
     initializeGame();
 });
