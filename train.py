@@ -22,8 +22,8 @@ MCTS_TEMPERATURE = 2.0
 NUM_ITERATIONS = 10000
 
 # --- Architectural Parameters ---
-NUM_FILTERS = 64 
-NUM_RESIDUAL_BLOCKS = 4
+NUM_FILTERS = 128
+NUM_RESIDUAL_BLOCKS = 8
 
 # --- Device Setup ---
 if torch.backends.mps.is_available():
